@@ -1,0 +1,267 @@
+name: 开源项目更新监控与分析
+
+# 触发条件：每天中国时间凌晨1点（UTC时间17:00）执行，支持手动触发
+on:
+  schedule:
+    - cron: '0 17 * * *'  # UTC时间17:00 = 北京时间01:00（+8时区）
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  monitor-projects:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码仓库
+        uses: actions/checkout@v3
+        with:
+          persist-credentials: true  # 保留凭据以便提交报告
+      
+      - name: 设置Python环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: 安装依赖包
+        run: |
+          python -m pip install --upgrade pip
+          pip install openai python-dotenv requests PyGithub python-dateutil
+      
+      - name: 创建报告存储目录
+        run: mkdir -p reports  # 创建报告存储目录
+      
+      - name: 加载项目配置
+        id: load_config
+        run: |
+          # 检查是否存在项目配置文件
+          if [ ! -f "projects.json" ]; then
+            echo "项目配置文件projects.json不存在，创建示例文件"
+            cat > projects.json << EOF
+            [
+              {
+                "name": "示例项目1",
+                "github_repo": "owner/repo1",
+                "last_checked_version": ""
+              },
+              {
+                "name": "示例项目2",
+                "github_repo": "owner/repo2",
+                "last_checked_version": ""
+              }
+            ]
+            EOF
+          fi
+          # 输出配置文件内容供后续步骤使用
+          echo "PROJECTS_CONFIG=$(cat projects.json | jq -c .)" >> $GITHUB_ENV
+      
+      - name: 检查新版本并分析
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}  # 此处仍使用该变量名存储访问密钥
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROJECTS_CONFIG: ${{ env.PROJECTS_CONFIG }}
+          CUSTOM_MODEL_ENDPOINT: "https://maas-cn-southwest-2.modelarts-maas.com/v1/infers/271c9332-4aa6-4ff5-95b3-0cf8bd94c394/v1"
+        run: |
+          python - <<END
+          import os
+          import json
+          import openai
+          import requests
+          from datetime import datetime
+          from github import Github
+          from dateutil.parser import parse
+
+          # 初始化GitHub客户端
+          g = Github(os.getenv("GITHUB_TOKEN"))
+          
+          # 加载项目配置
+          projects = json.loads(os.getenv("PROJECTS_CONFIG"))
+          today = datetime.now().strftime("%Y%m%d")
+          china_tz = datetime.now().astimezone().tzinfo  # 获取中国时区
+          
+          # 配置OpenAI客户端，使用自定义模型访问地址
+          openai.api_key = os.getenv("OPENAI_API_KEY")
+          openai.api_base = os.getenv("CUSTOM_MODEL_ENDPOINT")
+          
+          if not openai.api_key:
+              raise ValueError("OPENAI_API_KEY环境变量未设置")
+          
+          if not openai.api_base:
+              raise ValueError("自定义模型访问地址未设置")
+
+          # 分析提示词 - 保持原有格式
+          analysis_prompt_template = """
+          作为一名资深的软件架构师和安全专家，请分析以下开源项目的更新内容，
+          并从以下六个关键维度评估此次更新可能对依赖该开源软件的应用系统造成的影响。
+
+          分析维度：
+          1. 功能变更维度
+          2. 安全风险维度
+          3. 稳定性与性能维度
+          4. 兼容性与迁移成本维度
+          5. 项目维护与社区健康度维度
+          6. 许可证与合规性维度
+
+          请按照以下格式生成一份美观、易读的分析报告，重点突出需要关注的风险点：
+
+          # {project_name} v{version} 更新影响分析报告
+          
+          ## 📅 基本信息
+          - 项目名称: {project_name}
+          - 仓库地址: https://github.com/{repo_full_name}
+          - 版本号: {version}
+          - 分析日期: {analysis_date}
+          
+          ## 🔍 总体评估
+          [请给出总体影响评级：低/中/高，并简要说明理由]
+          
+          ## ⚠️ 关键风险提示
+          [列出3-5个最需要关注的风险点，使用加粗和警告符号突出显示]
+          
+          ## 📊 详细分析
+          
+          ### 1. 功能变更维度
+          [详细分析内容，使用项目符号列出关键点]
+          
+          ### 2. 安全风险维度
+          [详细分析内容，使用项目符号列出关键点，安全漏洞用⚠️标记]
+          
+          ### 3. 稳定性与性能维度
+          [详细分析内容，使用项目符号列出关键点]
+          
+          ### 4. 兼容性与迁移成本维度
+          [详细分析内容，使用项目符号列出关键点，破坏性变更用🔴标记]
+          
+          ### 5. 项目维护与社区健康度维度
+          [详细分析内容，使用项目符号列出关键点]
+          
+          ### 6. 许可证与合规性维度
+          [详细分析内容，使用项目符号列出关键点]
+          
+          ## 💡 建议措施
+          [列出具体、可操作的建议，按优先级排序]
+          
+          ## 📝 补充说明
+          [任何其他需要说明的内容]
+          
+          请确保报告语言简洁明了，重点突出，使用适当的Markdown格式（标题、列表、强调等）增强可读性。
+          对于需要特别注意的内容，使用**加粗**、⚠️、🔴等符号突出显示。
+
+          项目更新内容：
+          {changelog_content}
+          """
+
+          # 处理每个项目
+          for project in projects:
+              project_name = project["name"]
+              repo_full_name = project["github_repo"]
+              last_checked_version = project["last_checked_version"]
+              
+              print(f"\n===== 检查项目: {project_name} ({repo_full_name}) =====")
+              
+              try:
+                  # 获取仓库信息
+                  repo = g.get_repo(repo_full_name)
+                  
+                  # 获取最新发布版本
+                  releases = repo.get_releases()
+                  if releases.totalCount == 0:
+                      print(f"项目 {project_name} 没有发布版本")
+                      continue
+                  
+                  latest_release = next(releases)
+                  latest_version = latest_release.tag_name
+                  print(f"最新版本: {latest_version}, 上次检查版本: {last_checked_version}")
+                  
+                  # 检查是否有新版本
+                  if latest_version == last_checked_version:
+                      print("没有新版本，跳过分析")
+                      continue
+                  
+                  # 获取CHANGELOG内容
+                  changelog_content = ""
+                  try:
+                      # 尝试获取仓库中的CHANGELOG文件
+                      changelog_file = repo.get_contents("CHANGELOG.md")
+                      changelog_content = changelog_file.decoded_content.decode("utf-8")
+                      
+                      # 如果CHANGELOG太大，只取最近的部分
+                      if len(changelog_content) > 8000:
+                          print("CHANGELOG内容过长，仅分析最近部分")
+                          # 尝试找到最新版本的位置
+                          version_header = f"## [{latest_version}]"
+                          version_index = changelog_content.rfind(version_header)
+                          if version_index != -1:
+                              changelog_content = changelog_content[version_index:]
+                          else:
+                              # 如果找不到版本标题，取最后8000字符
+                              changelog_content = changelog_content[-8000:]
+                  except Exception as e:
+                      print(f"获取CHANGELOG失败: {str(e)}")
+                      # 尝试使用发布说明作为替代
+                      if latest_release.body:
+                          changelog_content = f"发布说明:\n{latest_release.body}"
+                      else:
+                          print("没有找到CHANGELOG或发布说明，无法分析")
+                          continue
+                  
+                  # 调用自定义模型进行分析
+                  print(f"调用自定义模型API进行分析: {openai.api_base}")
+                  analysis_date = datetime.now(china_tz).strftime("%Y-%m-%d %H:%M:%S %Z%z")
+                  prompt = analysis_prompt_template.format(
+                      project_name=project_name,
+                      repo_full_name=repo_full_name,
+                      version=latest_version,
+                      analysis_date=analysis_date,
+                      changelog_content=changelog_content
+                  )
+                  
+                  # 调用自定义端点的ChatCompletion接口
+                  response = openai.ChatCompletion.create(
+                      model="DeepSeek-V3",  # 根据实际模型情况调整
+                      messages=[
+                          {"role": "system", "content": "你是一位专业的软件安全与架构分析专家，擅长评估开源软件更新对依赖系统的影响。你的报告需要结构清晰、重点突出、易于阅读。"},
+                          {"role": "user", "content": prompt}
+                      ],
+                      temperature=0.3,
+                      max_tokens=5000
+                  )
+                  
+                  analysis_result = response.choices[0].message['content']
+                  
+                  # 生成报告文件名
+                  safe_project_name = project_name.replace(" ", "_").replace("/", "_")
+                  safe_version = latest_version.replace("v", "").replace(".", "_").replace(" ", "_")
+                  report_filename = f"reports/{safe_project_name}_{safe_version}_{today}.md"
+                  
+                  # 保存报告
+                  with open(report_filename, "w") as f:
+                      f.write(analysis_result)
+                  
+                  print(f"分析报告已保存至: {report_filename}")
+                  
+                  # 更新项目配置中的最后检查版本
+                  project["last_checked_version"] = latest_version
+                  
+              except Exception as e:
+                  print(f"处理项目 {project_name} 时出错: {str(e)}")
+                  continue
+          
+          # 保存更新后的项目配置
+          with open("projects.json", "w") as f:
+              json.dump(projects, f, indent=2)
+          print("已更新项目配置文件")
+          END
+        shell: bash
+      
+      - name: 提交并推送报告
+        run: |
+          # 检查是否有新报告或配置更新
+          git config --global user.name "Qi"
+          git config --global user.email "todayhill@gmail.com"
+          git add reports/ projects.json
+          # 只有在有变更时才提交
+          if ! git diff --quiet --staged; then
+              git commit -m "添加 $(date +'%Y-%m-%d') 的开源项目更新分析报告"
+              git push
+          else
+              echo "没有新报告需要提交"
+          fi
