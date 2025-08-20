@@ -32,24 +32,25 @@ jobs:
       - name: 加载项目配置
         id: load_config
         run: |
-          # 检查是否存在项目配置文件
+          # 严格检查项目配置文件是否存在
           if [ ! -f "projects.json" ]; then
-            echo "项目配置文件projects.json不存在，创建示例文件"
-            cat > projects.json << EOF
-            [
-              {
-                "name": "示例项目1",
-                "github_repo": "owner/repo1",
-                "last_checked_version": ""
-              },
-              {
-                "name": "示例项目2",
-                "github_repo": "owner/repo2",
-                "last_checked_version": ""
-              }
-            ]
-            EOF
+            echo "错误：项目配置文件projects.json不存在，请先创建并配置该文件"
+            exit 1  # 报错退出
           fi
+          
+          # 验证文件格式是否为有效的JSON
+          if ! jq . projects.json >/dev/null 2>&1; then
+            echo "错误：projects.json不是有效的JSON文件"
+            exit 1  # 格式错误退出
+          fi
+          
+          # 确保jq已安装（用于JSON格式化）
+          if ! command -v jq &> /dev/null; then
+            echo "安装jq工具"
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+          
           # 输出配置文件内容供后续步骤使用
           echo "PROJECTS_CONFIG=$(cat projects.json | jq -c .)" >> $GITHUB_ENV
       
