@@ -168,7 +168,7 @@ jobs:
                       print(f"项目 {project_name} 没有发布版本")
                       continue
                   
-                  latest_release = next(releases)
+                  latest_release = releases[0]
                   latest_version = latest_release.tag_name
                   print(f"最新版本: {latest_version}, 上次检查版本: {last_checked_version}")
                   
