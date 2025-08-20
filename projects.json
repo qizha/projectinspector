@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Karmada",
+    "github_repo": "karmada-io/karmada",
+    "last_checked_version": ""
+  },
+  {
+    "name": "ingress-nginx",
+    "github_repo": "kubernetes/ingress-nginx",
+    "last_checked_version": ""
+  }
+]
