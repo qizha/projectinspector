@@ -79,8 +79,10 @@ jobs:
           china_tz = datetime.now().astimezone().tzinfo  # 获取中国时区
           
           # 配置OpenAI客户端，使用自定义模型访问地址
-          openai.api_key = os.getenv("OPENAI_API_KEY")
-          openai.api_base = os.getenv("CUSTOM_MODEL_ENDPOINT")
+          client = openai.OpenAI(
+              api_key=os.getenv("OPENAI_API_KEY"),
+              base_url=os.getenv("CUSTOM_MODEL_ENDPOINT")
+          )
           
           if not openai.api_key:
               raise ValueError("OPENAI_API_KEY环境变量未设置")
@@ -216,7 +218,7 @@ jobs:
                   )
                   
                   # 调用自定义端点的ChatCompletion接口
-                  response = openai.ChatCompletion.create(
+                  response = client.chat.completions.create(
                       model="DeepSeek-V3",  # 根据实际模型情况调整
                       messages=[
                           {"role": "system", "content": "你是一位专业的软件安全与架构分析专家，擅长评估开源软件更新对依赖系统的影响。你的报告需要结构清晰、重点突出、易于阅读。"},
@@ -226,7 +228,7 @@ jobs:
                       max_tokens=5000
                   )
                   
-                  analysis_result = response.choices[0].message['content']
+                  analysis_result = response.choices[0].message.content
                   
                   # 生成报告文件名
                   safe_project_name = project_name.replace(" ", "_").replace("/", "_")
