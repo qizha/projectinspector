@@ -84,10 +84,10 @@ jobs:
               base_url=os.getenv("CUSTOM_MODEL_ENDPOINT")
           )
           
-          if not openai.api_key:
+          if not os.getenv("OPENAI_API_KEY"):
               raise ValueError("OPENAI_API_KEY环境变量未设置")
-          
-          if not openai.api_base:
+
+          if not os.getenv("CUSTOM_MODEL_ENDPOINT"):
               raise ValueError("自定义模型访问地址未设置")
 
           # 分析提示词 - 保持原有格式
