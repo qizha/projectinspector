@@ -9,7 +9,8 @@ on:
 jobs:
   monitor-projects:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write  # 允许写入仓库内容
     steps:
       - name: 检出代码仓库
         uses: actions/checkout@v3
