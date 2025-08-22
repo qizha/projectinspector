@@ -207,7 +207,7 @@ jobs:
                           continue
                   
                   # 调用自定义模型进行分析
-                  print(f"调用自定义模型API进行分析: {openai.api_base}")
+                  print(f"调用自定义模型API进行分析: {os.getenv('CUSTOM_MODEL_ENDPOINT')}")
                   analysis_date = datetime.now(china_tz).strftime("%Y-%m-%d %H:%M:%S %Z%z")
                   prompt = analysis_prompt_template.format(
                       project_name=project_name,
