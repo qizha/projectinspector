@@ -2,11 +2,11 @@
   {
     "name": "Karmada",
     "github_repo": "karmada-io/karmada",
-    "last_checked_version": "v1.15.0-rc.0"
+    "last_checked_version": "v1.15.0"
   },
   {
     "name": "ingress-nginx",
     "github_repo": "kubernetes/ingress-nginx",
-    "last_checked_version": "helm-chart-4.13.1"
+    "last_checked_version": "helm-chart-4.13.2"
   }
 ]
