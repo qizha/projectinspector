@@ -2,7 +2,7 @@
   {
     "name": "Karmada",
     "github_repo": "karmada-io/karmada",
-    "last_checked_version": "v1.16.0-alpha.2"
+    "last_checked_version": "v1.16.0-beta.0"
   },
   {
     "name": "ingress-nginx",
