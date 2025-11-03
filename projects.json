@@ -7,6 +7,6 @@
   {
     "name": "ingress-nginx",
     "github_repo": "kubernetes/ingress-nginx",
-    "last_checked_version": "helm-chart-4.13.3"
+    "last_checked_version": "helm-chart-4.14.0"
   }
 ]
